@@ -47,7 +47,7 @@ func (w *Worker) Run() {
 			case MsgRetireWorker:
 				log.Info("Worker retire, id: ", w.id)
 				w.online = false
-			case MsgDeliverData:
+			case MsgWorkerDelivery:
 				log.Infof("worker id %d starts delivering data", w.id)
 				w.sender <- NewMsgDeliverData(w.records, w.id)
 			}

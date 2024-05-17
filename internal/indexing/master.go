@@ -46,6 +46,45 @@ func (m *Master) Run(path string) {
 		log.Fatalf("Cannot delegate workload %v", err)
 	}
 
+	deliverReceived := 0
+
+	for {
+		select {
+		case msg := <-m.listener:
+			switch msg.Type {
+			case MsgWorkerCompleted:
+				workerId := msg.ID
+				log.Infof("worker id %d finished tasks", workerId)
+				m.retireWorker(workerId)
+				m.inused[workerId] = false
+			case MsgDeliverData:
+				records := msg.Data.(common.Records)
+				workerId := msg.ID
+				log.Infof("master receives data from worker id %d", workerId)
+				m.retireWorker(workerId)
+				deliverReceived++
+			}
+		default:
+			log.Info("master idle, checking status workers...")
+			var onlineWorkers int
+			for i := 0; i < len(m.online); i++ {
+				if m.online[i] {
+					onlineWorkers++
+				}
+			}
+			log.Infof("online workers %d", onlineWorkers)
+
+			var inusedWorkers int
+			for i := 0; i < len(m.inused); i++ {
+				if m.online[i] {
+					inusedWorkers++
+				}
+			}
+			log.Infof("online workers %d", inusedWorkers)
+
+		}
+	}
+
 }
 
 func (m *Master) newWorker(id int) (*Worker, error) {
