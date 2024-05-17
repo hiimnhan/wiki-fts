@@ -54,3 +54,6 @@ func LoadDocuments(path string) ([]Document, error) {
 
 	return docs, nil
 }
+
+type Record map[string]int
+type Records map[string]*Set // word:ID of Document
