@@ -8,7 +8,7 @@ type Msg struct {
 	ID   int
 }
 
-func NewMsgIndex(docs []common.Document, id int) *Msg {
+func NewMsgIndex(docs common.Documents, id int) *Msg {
 	return &Msg{Data: docs, Type: MsgIndex, ID: id}
 }
 
@@ -16,8 +16,8 @@ func NewMsgCombine(records common.Records, id int) *Msg {
 	return &Msg{Data: records, Type: MsgCombine, ID: id}
 }
 
-func NewMsgRetireWorker(id int) *Msg {
-	return &Msg{Type: MsgRetireWorker, ID: id}
+func NewMsgRetireWorker() *Msg {
+	return &Msg{Type: MsgRetireWorker}
 }
 
 func NewMsgDeliverData(records common.Records, id int) *Msg {

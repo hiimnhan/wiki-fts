@@ -33,7 +33,7 @@ func (w *Worker) Run() {
 		case msg := <-w.listener:
 			switch msg.Type {
 			case MsgIndex:
-				docs := msg.Data.([]common.Document)
+				docs := msg.Data.(common.Documents)
 				log.Infof("worker id %d starts indexing docs with len %d", w.id, len(docs))
 				start := time.Now()
 				w.index(docs)
@@ -55,7 +55,7 @@ func (w *Worker) Run() {
 	}
 }
 
-func (w *Worker) index(docs []common.Document) {
+func (w *Worker) index(docs common.Documents) {
 	records := make(common.Records)
 	for _, doc := range docs {
 		for _, token := range common.TokenizeAndFilter(fmt.Sprintf("%s %s", doc.Text, doc.Title)) {

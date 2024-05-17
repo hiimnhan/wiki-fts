@@ -10,3 +10,7 @@ const (
 	MsgWorkerCompleted
 	MsgWorkerDelivery
 )
+
+const (
+	DEFAULT_NUM_WORKERS = 10
+)

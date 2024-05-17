@@ -23,8 +23,10 @@ type Document struct {
 	ID    int
 }
 
+type Documents []Document
+
 // load document
-func LoadDocuments(path string) ([]Document, error) {
+func LoadDocuments(path string) (Documents, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
