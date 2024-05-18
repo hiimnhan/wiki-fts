@@ -1,6 +1,11 @@
 package indexing
 
 const (
+	WorkerChanCap = 64
+	MasterChanCap = 512
+)
+
+const (
 	MsgIndex = iota + 1
 	MsgCombine
 	MsgRetireWorker

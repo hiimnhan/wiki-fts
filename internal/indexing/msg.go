@@ -23,3 +23,7 @@ func NewMsgRetireWorker() *Msg {
 func NewMsgDeliverData(records common.Records, id int) *Msg {
 	return &Msg{Type: MsgDeliverData, Data: records, ID: id}
 }
+
+func NewMsgRequestData() *Msg {
+	return &Msg{Type: MsgWorkerDelivery}
+}

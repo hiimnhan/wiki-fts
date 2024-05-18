@@ -13,5 +13,5 @@ func (e *ErrMsg) Error() string {
 }
 
 func NewError(component string, err error) *ErrMsg {
-	return &ErrMsg{component, err.Error()}
+	return &ErrMsg{component: component, msg: err.Error()}
 }

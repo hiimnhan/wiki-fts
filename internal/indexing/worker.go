@@ -28,7 +28,7 @@ func NewWorker(listener chan *Msg, sender chan *Msg, id int) *Worker {
 
 func (w *Worker) Run() {
 	w.online = true
-	for {
+	for w.online {
 		select {
 		case msg := <-w.listener:
 			switch msg.Type {
@@ -38,19 +38,26 @@ func (w *Worker) Run() {
 				start := time.Now()
 				w.index(docs)
 				log.Infof("worker id %d finished index docs with time %v", w.id, time.Since(start))
-			case MsgCombine:
-				records := msg.Data.(common.Records)
-				log.Infof("worker id %d starts combining docs with len %d", w.id, len(records))
-				start := time.Now()
-				log.Infof("worker id %d finished combining docs with time %v", w.id, time.Since(start))
-				w.combine(records)
-			case MsgRetireWorker:
-				log.Info("Worker retire, id: ", w.id)
-				w.online = false
-			case MsgWorkerDelivery:
 				log.Infof("worker id %d starts delivering data", w.id)
 				w.sender <- NewMsgDeliverData(w.records, w.id)
+			case MsgCombine:
+				records := msg.Data.(common.Records)
+				log.Infof("worker %d received data from worker %d", w.id, msg.ID)
+				log.Infof("worker id %d starts combining docs with len %d", w.id, len(records))
+				start := time.Now()
+				w.combine(records)
+				log.Infof("worker id %d finished combining docs with time %v", w.id, time.Since(start))
+				log.Infof("worker id %d starts delivering data", w.id)
+				w.sender <- NewMsgDeliverData(w.records, w.id)
+			case MsgRetireWorker:
+				log.Infof("Worker retire, id: %d", w.id)
+				w.online = false
+				// case MsgWorkerDelivery:
+				// 	log.Infof("worker id %d starts delivering data", w.id)
+				// 	w.sender <- NewMsgDeliverData(w.records, w.id)
 			}
+		case <-time.After(2 * time.Second):
+			continue
 		}
 	}
 }

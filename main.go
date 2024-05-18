@@ -1,17 +1,11 @@
 package main
 
 import (
-	"github.com/charmbracelet/log"
 	"github.com/hiimnhan/wiki-fts/common"
-	"github.com/kr/pretty"
+	"github.com/hiimnhan/wiki-fts/internal/indexing"
 )
 
 func main() {
-	docs, err := common.LoadDocuments(common.WikiDumpZipPath)
-	if err != nil {
-		log.Error(err)
-	}
-
-	pretty.Print(docs[1])
-
+	master := indexing.NewMaster(10)
+	master.Run(common.WikiDumpZipPath)
 }

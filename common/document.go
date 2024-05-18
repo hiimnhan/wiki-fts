@@ -4,6 +4,8 @@ import (
 	"compress/gzip"
 	"encoding/xml"
 	"os"
+
+	"github.com/charmbracelet/log"
 )
 
 type Sublink struct {
@@ -27,6 +29,7 @@ type Documents []Document
 
 // load document
 func LoadDocuments(path string) (Documents, error) {
+	log.Infof("Loading documents %s...", path)
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
