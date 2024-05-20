@@ -3,10 +3,12 @@ package indexing
 import (
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/charmbracelet/log"
 	"github.com/hiimnhan/wiki-fts/common"
+	"github.com/kr/pretty"
 )
 
 type Master struct {
@@ -16,6 +18,7 @@ type Master struct {
 	listener     chan *Msg
 	numOfWorkers int
 	id           int
+	mu           sync.RWMutex
 }
 
 func NewMaster(numOfWorkers int) *Master {
@@ -52,7 +55,8 @@ func (m *Master) Run(path string) {
 		log.Fatalf("Cannot delegate workload %v", err)
 	}
 
-	deliverReceived := 0
+	// hcRequested := 0
+	hcReceived := 0
 
 	for {
 		select {
@@ -60,28 +64,33 @@ func (m *Master) Run(path string) {
 			switch msg.Type {
 			case MsgWorkerCompleted:
 				workerId := msg.ID
-				log.Infof("worker id %d finished tasks", workerId)
+				records := msg.Data.(common.Records)
+				log.Infof("worker %d finished tasks, len %d", workerId, len(records))
 				m.retireWorker(workerId)
-				m.available = append(m.available, workerId)
 			case MsgDeliverData:
 				records := msg.Data.(common.Records)
 				workerId := msg.ID
-				log.Infof("master receives data from worker id %d", workerId)
+				log.Infof("master receives data from worker %d, len %d", workerId, len(records))
 				m.transferData(workerId, records)
 				m.retireWorker(workerId)
-				deliverReceived++
+			case MsgWorkerInfo:
+				log.Infof("info of worker %d, %v", msg.ID, pretty.Sprint(msg.Data))
+				hcReceived++
 			}
 		case <-time.After(2 * time.Second):
 			log.Info("master idle, checking status workers...")
 
-			var onlineWorkers int
-			for i := 0; i < len(m.online); i++ {
-				if m.online[i] {
-					onlineWorkers++
-				}
+			onlineWorkers, size := m.onlineWorkers()
+			log.Warnf("online workers %d, %v", size, onlineWorkers)
+			if size == 0 {
+				log.Warn("all workers free now")
+				continue
 			}
-			log.Infof("online workers %d", onlineWorkers)
-			log.Infof("available workers %d", len(m.available))
+			// if hcReceived < hcRequested {
+			// 	log.Info("not all hc request return")
+			// 	continue
+			// }
+			// m.healthcheck(&hcRequested)
 		}
 	}
 
@@ -94,7 +103,7 @@ func (m *Master) newWorker(id int) (*Worker, error) {
 	channel := make(chan *Msg, WorkerChanCap)
 	worker := NewWorker(channel, m.listener, id)
 	m.workers[id] = channel
-	m.online[id] = true
+	m.online[id] = false
 	m.available = append(m.available, id)
 
 	return worker, nil
@@ -133,7 +142,10 @@ func (m *Master) nextAvailableWorker() (int, error) {
 		return 0, common.NewError("master", errors.New("no worker available"))
 	}
 	log.Warnf("available %v", m.available)
-	next := common.Pop(&m.available)
+	m.mu.Lock()
+	next, _ := common.Shift(&m.available)
+	m.mu.Unlock()
+	m.online[next] = true
 	log.Warnf("next worker %d", next)
 
 	return next, nil
@@ -161,11 +173,30 @@ func (m *Master) transferData(prevWorker int, data common.Records) {
 	m.workers[worker] <- NewMsgCombine(data, prevWorker)
 }
 
-// func (m *Master) requestData() {
-// 	for id := range m.inused {
-// 		if m.inused[id] {
-// 			log.Infof("requesting data from worker %d...", id)
-// 			m.workers[id] <- NewMsgRequestData()
-// 		}
-// 	}
-// }
+func (m *Master) onlineWorkers() (workers []int, size int) {
+	for i := range m.online {
+		if m.online[i] {
+			workers = append(workers, i)
+			size++
+		}
+	}
+
+	return
+}
+
+func (m *Master) requestData() {
+	workers, _ := m.onlineWorkers()
+	for w := range workers {
+		log.Infof("requesting data from worker %d...", w)
+		m.workers[w] <- NewMsgRequestData()
+	}
+}
+
+func (m *Master) healthcheck(hcRequested *int) {
+	workers, _ := m.onlineWorkers()
+	for _, w := range workers {
+		log.Infof("healthcheck worker %d...", w)
+		m.workers[w] <- NewMsgHealthcheck()
+		(*hcRequested)++
+	}
+}

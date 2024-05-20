@@ -27,3 +27,15 @@ func NewMsgDeliverData(records common.Records, id int) *Msg {
 func NewMsgRequestData() *Msg {
 	return &Msg{Type: MsgWorkerDelivery}
 }
+
+func NewMsgHealthcheck() *Msg {
+	return &Msg{Type: MsgHealthcheck}
+}
+
+func NewMsgWorkerInfo(info Info, id int) *Msg {
+	return &Msg{Type: MsgWorkerInfo, Data: info, ID: id}
+}
+
+func NewMsgWorkerCompleted(records common.Records, id int) *Msg {
+	return &Msg{Type: MsgWorkerCompleted, Data: records, ID: id}
+}

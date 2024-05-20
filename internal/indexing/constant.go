@@ -1,7 +1,7 @@
 package indexing
 
 const (
-	WorkerChanCap = 64
+	WorkerChanCap = 512
 	MasterChanCap = 512
 )
 
@@ -14,6 +14,8 @@ const (
 	MsgSortSave
 	MsgWorkerCompleted
 	MsgWorkerDelivery
+	MsgHealthcheck
+	MsgWorkerInfo
 )
 
 const (
