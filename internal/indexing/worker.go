@@ -66,14 +66,15 @@ func (w *Worker) Run() {
 				log.Infof("worker id %d finished index docs with time %v, len %d", w.id, time.Since(start), len(w.records))
 				log.Infof("worker id %d starts delivering data", w.id)
 				w.sender <- NewMsgDeliverData(w.records, w.id)
+				w.records = make(common.Records)
 			case MsgCombine:
 				w.info.stage = REDUCE
 				records := msg.Data.(common.Records)
 				w.info.workState = IN_PROGRESS
 				log.Infof("worker %d received data from worker %d, len %d", w.id, msg.ID, len(records))
-				log.Errorf("worker id %d starts combining docs with len %d", w.id, len(records))
+				log.Infof("worker id %d starts combining docs with len %d", w.id, len(records))
 				start := time.Now()
-				// w.combine(records)
+				w.combine(records)
 				w.info.workState = COMPLETED
 				log.Infof("worker id %d finished combining docs with time %v", w.id, time.Since(start))
 				log.Infof("worker id %d starts delivering data", w.id)
@@ -83,9 +84,6 @@ func (w *Worker) Run() {
 				log.Infof("Worker retire, id: %d", w.id)
 				w.online = false
 				w.info.workState = IDLE
-			case MsgWorkerDelivery:
-				log.Infof("worker id %d starts delivering data", w.id)
-				w.sender <- NewMsgDeliverData(w.records, w.id)
 			case MsgHealthcheck:
 				log.Infof("worker %d send info to master", w.id)
 				w.sender <- NewMsgWorkerInfo(w.info, w.id)
@@ -94,6 +92,8 @@ func (w *Worker) Run() {
 			continue
 		}
 	}
+
+	log.Warnf("worker %d stopped", w.id)
 }
 
 func (w *Worker) index(docs common.Documents) {
@@ -118,14 +118,17 @@ func (w *Worker) index(docs common.Documents) {
 }
 
 func (w *Worker) combine(records common.Records) {
-	log.Warnf("worker %d combining...", w.id)
 	for word, set := range records {
 		for _, id := range set.Items() {
+			wSet := w.records[word]
+			if wSet == nil {
+				wSet = new(common.Set)
+				w.records[word] = wSet
+			}
 			if !w.records[word].Has(id) {
 				w.records[word].Add(id)
 			}
 		}
 	}
 	log.Warnf("worker %d finished combining...", w.id)
-
 }

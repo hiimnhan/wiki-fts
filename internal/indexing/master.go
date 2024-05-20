@@ -1,14 +1,15 @@
 package indexing
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
 	"github.com/charmbracelet/log"
 	"github.com/hiimnhan/wiki-fts/common"
-	"github.com/kr/pretty"
 )
 
 type Master struct {
@@ -19,6 +20,8 @@ type Master struct {
 	numOfWorkers int
 	id           int
 	mu           sync.RWMutex
+	running      bool
+	records      []common.Records
 }
 
 func NewMaster(numOfWorkers int) *Master {
@@ -29,6 +32,8 @@ func NewMaster(numOfWorkers int) *Master {
 		listener:     make(chan *Msg, MasterChanCap),
 		numOfWorkers: numOfWorkers,
 		id:           0,
+		running:      true,
+		records:      make([]common.Records, 0),
 	}
 }
 
@@ -42,8 +47,6 @@ func (m *Master) Run(path string) {
 		go worker.Run()
 	}
 
-	log.Warnf("num available %d, %v", len(m.available), m.available)
-
 	numsOfMapWorkers := m.numOfWorkers / 2
 	workloads, err := m.generateWorkloads(path, numsOfMapWorkers)
 	if err != nil {
@@ -55,45 +58,46 @@ func (m *Master) Run(path string) {
 		log.Fatalf("Cannot delegate workload %v", err)
 	}
 
-	// hcRequested := 0
-	hcReceived := 0
+	reduceCompleted := 0
 
-	for {
+	for m.running {
 		select {
 		case msg := <-m.listener:
 			switch msg.Type {
 			case MsgWorkerCompleted:
 				workerId := msg.ID
 				records := msg.Data.(common.Records)
+				m.records = append(m.records, records)
 				log.Infof("worker %d finished tasks, len %d", workerId, len(records))
 				m.retireWorker(workerId)
+				reduceCompleted++
 			case MsgDeliverData:
 				records := msg.Data.(common.Records)
 				workerId := msg.ID
 				log.Infof("master receives data from worker %d, len %d", workerId, len(records))
 				m.transferData(workerId, records)
-				m.retireWorker(workerId)
-			case MsgWorkerInfo:
-				log.Infof("info of worker %d, %v", msg.ID, pretty.Sprint(msg.Data))
-				hcReceived++
 			}
 		case <-time.After(2 * time.Second):
 			log.Info("master idle, checking status workers...")
 
 			onlineWorkers, size := m.onlineWorkers()
-			log.Warnf("online workers %d, %v", size, onlineWorkers)
-			if size == 0 {
-				log.Warn("all workers free now")
-				continue
+			switch size {
+			case 0:
+				log.Warn("no worker online")
+			default:
+				if reduceCompleted == len(workloads) {
+					for _, w := range onlineWorkers {
+						m.retireWorker(w)
+					}
+					m.saveRecordsToDisk()
+					m.running = false
+				}
 			}
-			// if hcReceived < hcRequested {
-			// 	log.Info("not all hc request return")
-			// 	continue
-			// }
-			// m.healthcheck(&hcRequested)
 		}
 	}
 
+	log.Warn("master stopped")
+	return
 }
 
 func (m *Master) newWorker(id int) (*Worker, error) {
@@ -112,7 +116,6 @@ func (m *Master) newWorker(id int) (*Worker, error) {
 func (m *Master) retireWorker(id int) {
 	m.workers[id] <- NewMsgRetireWorker()
 	m.online[id] = false
-	m.available = append(m.available, id)
 }
 
 func (m *Master) generateWorkloads(path string, numOfWorkers int) ([]common.Documents, error) {
@@ -163,6 +166,20 @@ func (m *Master) delegateInitialWorkload(workloads []common.Documents) error {
 	return nil
 }
 
+func (m *Master) saveRecordsToDisk() {
+	// save records to disk
+	b, err := json.Marshal(m.records)
+	if err != nil {
+		log.Fatalf("Cannot marshal records %v", err)
+	}
+
+	err = os.WriteFile(common.OutputPath, b, 0644)
+	if err != nil {
+		log.Fatalf("Cannot write records to disk %v", err)
+	}
+
+}
+
 func (m *Master) transferData(prevWorker int, data common.Records) {
 	worker, err := m.nextAvailableWorker()
 	if err != nil {
@@ -171,6 +188,7 @@ func (m *Master) transferData(prevWorker int, data common.Records) {
 
 	log.Infof("redirect data from worker %d to worker %d", prevWorker, worker)
 	m.workers[worker] <- NewMsgCombine(data, prevWorker)
+	m.available = append(m.available, prevWorker)
 }
 
 func (m *Master) onlineWorkers() (workers []int, size int) {
@@ -184,19 +202,10 @@ func (m *Master) onlineWorkers() (workers []int, size int) {
 	return
 }
 
-func (m *Master) requestData() {
-	workers, _ := m.onlineWorkers()
-	for w := range workers {
-		log.Infof("requesting data from worker %d...", w)
-		m.workers[w] <- NewMsgRequestData()
-	}
-}
-
-func (m *Master) healthcheck(hcRequested *int) {
+func (m *Master) healthcheck() {
 	workers, _ := m.onlineWorkers()
 	for _, w := range workers {
 		log.Infof("healthcheck worker %d...", w)
 		m.workers[w] <- NewMsgHealthcheck()
-		(*hcRequested)++
 	}
 }

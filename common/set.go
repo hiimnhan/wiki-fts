@@ -9,44 +9,46 @@ type Set struct {
 
 func (s *Set) Add(item any) *Set {
 	s.lock.Lock()
-	defer s.lock.Unlock()
 
 	if s.items == nil {
 		s.items = make(map[any]bool)
 	}
+	s.lock.Unlock()
 
+	s.lock.RLock()
 	if _, ok := s.items[item]; !ok {
 		s.items[item] = true
 	}
+	s.lock.RUnlock()
 
 	return s
 }
 
 func (s *Set) Delete(item any) bool {
 	s.lock.Lock()
-	defer s.lock.Unlock()
 	_, ok := s.items[item]
 	if ok {
 		delete(s.items, item)
 	}
+	s.lock.Unlock()
 
 	return ok
 }
 
 func (s *Set) Has(item any) bool {
 	s.lock.RLock()
-	defer s.lock.RUnlock()
 	_, ok := s.items[item]
+	s.lock.RUnlock()
 	return ok
 }
 
 func (s *Set) Items() []any {
 	s.lock.RLock()
-	defer s.lock.RUnlock()
 	items := []any{}
 	for i := range s.items {
 		items = append(items, i)
 	}
+	s.lock.RUnlock()
 
 	return items
 }
