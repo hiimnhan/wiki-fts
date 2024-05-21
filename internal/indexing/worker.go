@@ -73,7 +73,7 @@ func (w *Worker) Run() {
 				w.info.stage = REDUCE
 				records := msg.Data.([]common.Records)
 				w.info.workState = IN_PROGRESS
-				log.Infof("worker %d received data from worker %d, len %d", w.id, msg.ID, len(records))
+				log.Infof("worker %d received data from master, len %d", w.id, len(records))
 				log.Infof("worker id %d starts combining docs with len %d", w.id, len(records))
 				start := time.Now()
 				w.combine(records)
