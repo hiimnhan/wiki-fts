@@ -2,8 +2,11 @@ package common
 
 import (
 	"compress/gzip"
+	"encoding/json"
 	"encoding/xml"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/charmbracelet/log"
 )
@@ -26,10 +29,12 @@ type Document struct {
 }
 
 type Documents []Document
+type DocumentDict map[int]Document
 
 // load document
 func LoadDocuments(path string) (Documents, error) {
 	log.Infof("Loading documents %s...", path)
+	start := time.Now()
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -55,9 +60,33 @@ func LoadDocuments(path string) (Documents, error) {
 	docs := d.Documents
 	for i := range docs {
 		docs[i].ID = i
+		after, found := strings.CutPrefix(docs[i].Title, "wikipedia: ")
+		if found {
+			docs[i].Title = after
+		}
 	}
 
+	log.Infof("Loaded %d documents in %v", len(docs), time.Since(start))
 	return docs, nil
+}
+
+func (d *Documents) SaveDocsDictToDisk(path string) error {
+	docDict := make(DocumentDict)
+	log.Infof("Saving documents to %s...", path)
+	for _, doc := range *d {
+		docDict[doc.ID] = doc
+	}
+	b, err := json.Marshal(docDict)
+	if err != nil {
+		return NewError("documents", err)
+	}
+
+	err = os.WriteFile(path, b, 0644)
+	if err != nil {
+		return NewError("documents", err)
+	}
+	log.Infof("Saved %d documents to %s", len(docDict), path)
+	return nil
 }
 
 type Record map[string]int

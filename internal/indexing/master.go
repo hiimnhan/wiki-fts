@@ -124,6 +124,10 @@ func (m *Master) generateWorkloads(path string, numOfWorkers int) ([]common.Docu
 	if err != nil {
 		return nil, err
 	}
+	err = docs.SaveDocsDictToDisk(common.DocDictPath)
+	if err != nil {
+		return nil, err
+	}
 	if numOfWorkers == 0 {
 		numOfWorkers = DEFAULT_NUM_WORKERS
 	}
