@@ -28,3 +28,16 @@ func RemoveElement(arr []int, ele int) []int {
 
 	return append(arr[:index], arr[index+1:]...)
 }
+
+func Intersection(a, b []int) []int {
+	res := []int{}
+	for _, x := range a {
+		for _, y := range b {
+			if x == y {
+				res = append(res, x)
+				break
+			}
+		}
+	}
+	return res
+}

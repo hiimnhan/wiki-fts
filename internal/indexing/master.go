@@ -47,56 +47,57 @@ func (m *Master) Run(path string) {
 		go worker.Run()
 	}
 
-	numsOfMapWorkers := m.numOfWorkers / 2
+	numsOfMapWorkers := m.numOfWorkers - 1
 	workloads, err := m.generateWorkloads(path, numsOfMapWorkers)
 	if err != nil {
 		log.Fatalf("Cannot generate workload %v", err)
 	}
 
+	start := time.Now()
 	err = m.delegateInitialWorkload(workloads)
 	if err != nil {
 		log.Fatalf("Cannot delegate workload %v", err)
 	}
 
-	reduceCompleted := 0
+	mapDataReceived := 0
 
 	for m.running {
 		select {
 		case msg := <-m.listener:
 			switch msg.Type {
-			case MsgWorkerCompleted:
+			case MsgWorkerCombineCompleted:
 				workerId := msg.ID
-				records := msg.Data.(common.Records)
-				m.records = append(m.records, records)
-				log.Infof("worker %d finished tasks, len %d", workerId, len(records))
+				log.Infof("worker %d finished combining tasks", workerId)
+				m.requestSaveToDisk(workerId)
 				m.retireWorker(workerId)
-				reduceCompleted++
+			case MsgWorkerCompleted:
+				log.Infof("worker %d completed", msg.ID)
+				log.Info("all workers completed all task, shutting down...")
+				m.running = false
 			case MsgDeliverData:
 				records := msg.Data.(common.Records)
 				workerId := msg.ID
 				log.Infof("master receives data from worker %d, len %d", workerId, len(records))
-				m.transferData(workerId, records)
+				m.records = append(m.records, records)
+				m.retireWorker(workerId)
+				mapDataReceived++
+				if mapDataReceived == numsOfMapWorkers {
+					m.transferData()
+				}
 			}
 		case <-time.After(2 * time.Second):
 			log.Info("master idle, checking status workers...")
 
-			onlineWorkers, size := m.onlineWorkers()
+			_, size := m.onlineWorkers()
 			switch size {
 			case 0:
 				log.Warn("no worker online")
 			default:
-				if reduceCompleted == len(workloads) {
-					for _, w := range onlineWorkers {
-						m.retireWorker(w)
-					}
-					m.saveRecordsToDisk()
-					m.running = false
-				}
 			}
 		}
 	}
-
 	log.Warn("master stopped")
+	log.Printf("Indexing and combining took %v", time.Since(start))
 	return
 }
 
@@ -127,14 +128,17 @@ func (m *Master) generateWorkloads(path string, numOfWorkers int) ([]common.Docu
 		numOfWorkers = DEFAULT_NUM_WORKERS
 	}
 
-	var workloads []common.Documents
+	workloads := make([]common.Documents, numOfWorkers)
 	chunkSize := len(docs) / numOfWorkers
-	for i := 0; i < len(docs); i += chunkSize {
-		end := i + chunkSize
-		if end > len(docs) {
-			end = len(docs)
+	remainder := len(docs) % numOfWorkers
+	start := 0
+	for i := 0; i < numOfWorkers; i++ {
+		end := start + chunkSize
+		if i < remainder {
+			end++
 		}
-		workloads = append(workloads, docs[i:end])
+		workloads[i] = docs[start:end]
+		start = end
 	}
 
 	return workloads, nil
@@ -180,15 +184,14 @@ func (m *Master) saveRecordsToDisk() {
 
 }
 
-func (m *Master) transferData(prevWorker int, data common.Records) {
+func (m *Master) transferData() {
 	worker, err := m.nextAvailableWorker()
 	if err != nil {
 		log.Fatalf("Can not move to next stage %v", err)
 	}
 
-	log.Infof("redirect data from worker %d to worker %d", prevWorker, worker)
-	m.workers[worker] <- NewMsgCombine(data, prevWorker)
-	m.available = append(m.available, prevWorker)
+	log.Infof("redirect data from master to worker %d", worker)
+	m.workers[worker] <- NewMsgCombine(m.records)
 }
 
 func (m *Master) onlineWorkers() (workers []int, size int) {
@@ -208,4 +211,8 @@ func (m *Master) healthcheck() {
 		log.Infof("healthcheck worker %d...", w)
 		m.workers[w] <- NewMsgHealthcheck()
 	}
+}
+
+func (m *Master) requestSaveToDisk(id int) {
+	m.workers[id] <- NewMsgSaveToDisk()
 }

@@ -1,7 +1,9 @@
 package indexing
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/charmbracelet/log"
@@ -69,7 +71,7 @@ func (w *Worker) Run() {
 				w.records = make(common.Records)
 			case MsgCombine:
 				w.info.stage = REDUCE
-				records := msg.Data.(common.Records)
+				records := msg.Data.([]common.Records)
 				w.info.workState = IN_PROGRESS
 				log.Infof("worker %d received data from worker %d, len %d", w.id, msg.ID, len(records))
 				log.Infof("worker id %d starts combining docs with len %d", w.id, len(records))
@@ -78,12 +80,17 @@ func (w *Worker) Run() {
 				w.info.workState = COMPLETED
 				log.Infof("worker id %d finished combining docs with time %v", w.id, time.Since(start))
 				log.Infof("worker id %d starts delivering data", w.id)
-				w.sender <- NewMsgWorkerCompleted(w.records, w.id)
+				w.sender <- NewMsgWorkerCombineCompleted(w.id)
 			case MsgRetireWorker:
 				w.info.stage = OFFLINE
 				log.Infof("Worker retire, id: %d", w.id)
 				w.online = false
 				w.info.workState = IDLE
+			case MsgSaveToDisk:
+				log.Infof("worker %d starts saving records to disk", w.id)
+				w.saveRecordsToDisk()
+				log.Infof("worker %d finished saving records to disk", w.id)
+				w.sender <- NewMsgWorkerCompleted(w.id)
 			case MsgHealthcheck:
 				log.Infof("worker %d send info to master", w.id)
 				w.sender <- NewMsgWorkerInfo(w.info, w.id)
@@ -113,22 +120,40 @@ func (w *Worker) index(docs common.Documents) {
 
 	w.records = records
 
-	log.Warnf("worker %d finished indexing...", w.id)
+	log.Infof("worker %d finished indexing...", w.id)
 
 }
 
-func (w *Worker) combine(records common.Records) {
-	for word, set := range records {
-		for _, id := range set.Items() {
-			wSet := w.records[word]
-			if wSet == nil {
-				wSet = new(common.Set)
-				w.records[word] = wSet
-			}
-			if !w.records[word].Has(id) {
-				w.records[word].Add(id)
+func (w *Worker) combine(records []common.Records) {
+	// combine records from other workers, return a map of token -> set of doc ids
+	combinedRecords := make(common.Records)
+	for _, r := range records {
+		for token, set := range r {
+			if combinedSet, exist := combinedRecords[token]; exist {
+				combinedSet.Merge(set)
+			} else {
+				combinedRecords[token] = set
 			}
 		}
 	}
-	log.Warnf("worker %d finished combining...", w.id)
+	w.records = combinedRecords
+	log.Infof("worker %d finished combining..., len %d", w.id, len(combinedRecords))
+}
+
+func (w *Worker) saveRecordsToDisk() {
+	// save records to disk
+	invertedIndex := make(map[string][]int)
+	for token, set := range w.records {
+		invertedIndex[token] = set.Items()
+	}
+	b, err := json.Marshal(invertedIndex)
+	if err != nil {
+		log.Fatalf("Cannot marshal records %v", err)
+	}
+
+	err = os.WriteFile(common.OutputPath, b, 0644)
+	if err != nil {
+		log.Fatalf("Cannot write records to disk %v", err)
+	}
+	log.Infof("worker %d saved records to disk", w.id)
 }

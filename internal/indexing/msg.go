@@ -12,8 +12,8 @@ func NewMsgIndex(docs common.Documents, id int) *Msg {
 	return &Msg{Data: docs, Type: MsgIndex, ID: id}
 }
 
-func NewMsgCombine(records common.Records, id int) *Msg {
-	return &Msg{Data: records, Type: MsgCombine, ID: id}
+func NewMsgCombine(records []common.Records) *Msg {
+	return &Msg{Data: records, Type: MsgCombine}
 }
 
 func NewMsgRetireWorker() *Msg {
@@ -36,6 +36,14 @@ func NewMsgWorkerInfo(info Info, id int) *Msg {
 	return &Msg{Type: MsgWorkerInfo, Data: info, ID: id}
 }
 
-func NewMsgWorkerCompleted(records common.Records, id int) *Msg {
-	return &Msg{Type: MsgWorkerCompleted, Data: records, ID: id}
+func NewMsgWorkerCombineCompleted(id int) *Msg {
+	return &Msg{Type: MsgWorkerCombineCompleted, ID: id}
+}
+
+func NewMsgWorkerCompleted(id int) *Msg {
+	return &Msg{Type: MsgWorkerCompleted, ID: id}
+}
+
+func NewMsgSaveToDisk() *Msg {
+	return &Msg{Type: MsgSaveToDisk}
 }

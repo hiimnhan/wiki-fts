@@ -3,15 +3,15 @@ package common
 import "sync"
 
 type Set struct {
-	items map[any]bool
+	items map[int]bool
 	lock  sync.RWMutex
 }
 
-func (s *Set) Add(item any) *Set {
+func (s *Set) Add(item int) *Set {
 	s.lock.Lock()
 
 	if s.items == nil {
-		s.items = make(map[any]bool)
+		s.items = make(map[int]bool)
 	}
 	s.lock.Unlock()
 
@@ -24,7 +24,7 @@ func (s *Set) Add(item any) *Set {
 	return s
 }
 
-func (s *Set) Delete(item any) bool {
+func (s *Set) Delete(item int) bool {
 	s.lock.Lock()
 	_, ok := s.items[item]
 	if ok {
@@ -35,16 +35,26 @@ func (s *Set) Delete(item any) bool {
 	return ok
 }
 
-func (s *Set) Has(item any) bool {
+func (s *Set) Merge(another *Set) *Set {
+	s.lock.Lock()
+	for item := range another.Items() {
+		s.items[item] = true
+	}
+	s.lock.Unlock()
+
+	return s
+}
+
+func (s *Set) Has(item int) bool {
 	s.lock.RLock()
 	_, ok := s.items[item]
 	s.lock.RUnlock()
 	return ok
 }
 
-func (s *Set) Items() []any {
+func (s *Set) Items() []int {
 	s.lock.RLock()
-	items := []any{}
+	items := []int{}
 	for i := range s.items {
 		items = append(items, i)
 	}

@@ -7,6 +7,7 @@ import (
 
 func tokenize(text string) []string {
 	return strings.FieldsFunc(text, func(r rune) bool {
+		// return true if r is not a letter or a digit
 		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
 	})
 }
@@ -31,6 +32,7 @@ var stopwords = map[string]bool{
 	"that": true,
 	"the":  true,
 	"to":   true,
+	"":     true,
 }
 
 func commonWordFilter(tokens []string) []string {

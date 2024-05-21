@@ -11,7 +11,8 @@ const (
 	MsgRetireWorker
 	MsgDeliverData
 	MsgClearData
-	MsgSortSave
+	MsgSaveToDisk
+	MsgWorkerCombineCompleted
 	MsgWorkerCompleted
 	MsgWorkerDelivery
 	MsgHealthcheck
