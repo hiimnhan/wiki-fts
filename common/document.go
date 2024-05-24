@@ -4,6 +4,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -112,6 +113,8 @@ func (idx *Index) FindIndexes(text string) []int {
 	for _, word := range TokenizeAndFilter(text) {
 		log.Printf("Word %q...", word)
 		if ids, ok := (*idx)[word]; ok {
+			slices.Sort(ids)
+			log.Printf("%d", len(ids))
 			res = append(res, ids)
 		} else {
 			res = append(res, []int{})

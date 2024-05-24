@@ -119,6 +119,19 @@ func (w *Worker) index(docs common.Documents) {
 	}
 
 	w.records = records
+	invertedIndex := make(common.Index)
+	for token, set := range w.records {
+		invertedIndex[token] = set.Items()
+	}
+	b, err := json.Marshal(invertedIndex)
+	if err != nil {
+		log.Fatalf("Cannot marshal records %v", err)
+	}
+
+	err = os.WriteFile(fmt.Sprintf("worker_%d", w.id), b, 0644)
+	if err != nil {
+		log.Fatalf("Cannot write records to disk %v", err)
+	}
 
 	log.Infof("worker %d finished indexing...", w.id)
 
@@ -137,6 +150,20 @@ func (w *Worker) combine(records []common.Records) {
 		}
 	}
 	w.records = combinedRecords
+	invertedIndex := make(common.Index)
+	for token, set := range w.records {
+		invertedIndex[token] = set.Items()
+	}
+	b, err := json.Marshal(invertedIndex)
+	if err != nil {
+		log.Fatalf("Cannot marshal records %v", err)
+	}
+
+	err = os.WriteFile(fmt.Sprintf("combine%d", w.id), b, 0644)
+	if err != nil {
+		log.Fatalf("Cannot write records to disk %v", err)
+	}
+
 	log.Infof("worker %d finished combining..., len %d", w.id, len(combinedRecords))
 }
 

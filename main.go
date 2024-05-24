@@ -3,11 +3,14 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"slices"
+
 	// "fmt"
 	"io"
 	"log"
 	"os"
-	"runtime"
+
+	// "runtime"
 	"time"
 
 	"github.com/hiimnhan/wiki-fts/common"
@@ -15,7 +18,7 @@ import (
 )
 
 func main() {
-	runtime.GOMAXPROCS(runtime.NumCPU())
+	// runtime.GOMAXPROCS(runtime.NumCPU())
 	start := time.Now()
 	master := indexing.NewMaster(10)
 	master.Run(common.WikiDumpPath)
@@ -42,6 +45,8 @@ func main() {
 
 	start = time.Now()
 	matchedIds := records.FindIndexes(query)
+
+	slices.Sort(matchedIds)
 
 	// for _, id := range matchedIds {
 	// 	doc := (*docsDict)[id]
