@@ -1,11 +1,11 @@
 package common
 
 import (
-	"compress/gzip"
-	"encoding/json"
 	"encoding/xml"
+	"fmt"
 	"os"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/charmbracelet/log"
@@ -28,6 +28,19 @@ type Document struct {
 	ID    int
 }
 
+func (d *Document) Display() string {
+	var s string
+	s += fmt.Sprintf("Title: %s\n", d.Title)
+	s += fmt.Sprintf("URL: %s\n", d.URL)
+	s += fmt.Sprintf("Text: %s\n\n", d.Text)
+	s += "Links:\n"
+	for _, link := range d.Links.Sublinks {
+		s += fmt.Sprintf("%s: %s\n", link.Anchor, link.URL)
+	}
+
+	return s
+}
+
 type Documents []Document
 type DocumentDict map[int]Document
 
@@ -41,26 +54,36 @@ func LoadDocuments(path string) (Documents, error) {
 	}
 	defer f.Close()
 
-	gz, err := gzip.NewReader(f)
+	fi, err := f.Stat()
 	if err != nil {
-		return nil, NewError("Documents", err)
+		return nil, err
 	}
-	defer gz.Close()
 
-	decoder := xml.NewDecoder(gz)
+	size := fi.Size()
+	log.Printf("File size %d", size)
+	if size <= 0 || size != int64(int(size)) {
+		return nil, fmt.Errorf("Invalid file size %d", size)
+	}
+
+	data, err := syscall.Mmap(int(f.Fd()), 0, int(size), syscall.PROT_READ, syscall.MAP_SHARED)
+	if err != nil {
+		return nil, err
+	}
+	defer syscall.Munmap(data)
 
 	d := struct {
 		Documents []Document `xml:"doc"`
 	}{}
 
-	if err := decoder.Decode(&d); err != nil {
-		return nil, NewError("Documents", err)
+	err = xml.Unmarshal(data, &d)
+	if err != nil {
+		return nil, err
 	}
 
 	docs := d.Documents
 	for i := range docs {
 		docs[i].ID = i
-		after, found := strings.CutPrefix(docs[i].Title, "wikipedia: ")
+		after, found := strings.CutPrefix(docs[i].Title, "Wikipedia: ")
 		if found {
 			docs[i].Title = after
 		}
@@ -70,24 +93,30 @@ func LoadDocuments(path string) (Documents, error) {
 	return docs, nil
 }
 
-func (d *Documents) SaveDocsDictToDisk(path string) error {
+func (d *Documents) GenerateDocsDictionary() *DocumentDict {
 	docDict := make(DocumentDict)
-	log.Infof("Saving documents to %s...", path)
 	for _, doc := range *d {
 		docDict[doc.ID] = doc
 	}
-	b, err := json.Marshal(docDict)
-	if err != nil {
-		return NewError("documents", err)
-	}
-
-	err = os.WriteFile(path, b, 0644)
-	if err != nil {
-		return NewError("documents", err)
-	}
-	log.Infof("Saved %d documents to %s", len(docDict), path)
-	return nil
+	return &docDict
 }
 
 type Record map[string]int
 type Records map[string]*Set // word:ID of Document
+
+type Index map[string][]int
+
+func (idx *Index) FindIndexes(text string) []int {
+	log.Printf("Querying %q\n....", text)
+	var res [][]int
+	for _, word := range TokenizeAndFilter(text) {
+		log.Printf("Word %q...", word)
+		if ids, ok := (*idx)[word]; ok {
+			res = append(res, ids)
+		} else {
+			res = append(res, []int{})
+		}
+	}
+
+	return Intersect(res)
+}

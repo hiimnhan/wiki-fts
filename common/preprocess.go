@@ -8,7 +8,7 @@ import (
 func tokenize(text string) []string {
 	return strings.FieldsFunc(text, func(r rune) bool {
 		// return true if r is not a letter or a digit
-		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+		return !unicode.IsLetter(r) && !unicode.IsNumber(r)
 	})
 }
 
@@ -21,22 +21,22 @@ func lower(tokens []string) []string {
 	return res
 }
 
-var stopwords = map[string]bool{
-	"a":    true,
-	"and":  true,
-	"be":   true,
-	"have": true,
-	"i":    true,
-	"in":   true,
-	"of":   true,
-	"that": true,
-	"the":  true,
-	"to":   true,
-	"":     true,
+var stopwords = map[string]struct{}{
+	"a":    {},
+	"and":  {},
+	"be":   {},
+	"have": {},
+	"i":    {},
+	"in":   {},
+	"of":   {},
+	"that": {},
+	"the":  {},
+	"to":   {},
+	"":     {},
 }
 
 func commonWordFilter(tokens []string) []string {
-	res := make([]string, len(tokens))
+	res := make([]string, 0, len(tokens))
 	for _, t := range tokens {
 		if _, ok := stopwords[t]; !ok {
 			res = append(res, t)

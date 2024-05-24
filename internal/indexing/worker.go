@@ -142,7 +142,7 @@ func (w *Worker) combine(records []common.Records) {
 
 func (w *Worker) saveRecordsToDisk() {
 	// save records to disk
-	invertedIndex := make(map[string][]int)
+	invertedIndex := make(common.Index)
 	for token, set := range w.records {
 		invertedIndex[token] = set.Items()
 	}

@@ -22,6 +22,7 @@ type Master struct {
 	mu           sync.RWMutex
 	running      bool
 	records      []common.Records
+	docsDict     *common.DocumentDict
 }
 
 func NewMaster(numOfWorkers int) *Master {
@@ -34,10 +35,11 @@ func NewMaster(numOfWorkers int) *Master {
 		id:           0,
 		running:      true,
 		records:      make([]common.Records, 0),
+		docsDict:     new(common.DocumentDict),
 	}
 }
 
-func (m *Master) Run(path string) {
+func (m *Master) Run(path string) *common.DocumentDict {
 	for id := 1; id <= m.numOfWorkers; id++ {
 		worker, err := m.newWorker(id)
 		if err != nil {
@@ -98,7 +100,7 @@ func (m *Master) Run(path string) {
 	}
 	log.Warn("master stopped")
 	log.Printf("Indexing and combining took %v", time.Since(start))
-	return
+	return m.docsDict
 }
 
 func (m *Master) newWorker(id int) (*Worker, error) {
@@ -121,10 +123,10 @@ func (m *Master) retireWorker(id int) {
 
 func (m *Master) generateWorkloads(path string, numOfWorkers int) ([]common.Documents, error) {
 	docs, err := common.LoadDocuments(path)
+	m.docsDict = docs.GenerateDocsDictionary()
 	if err != nil {
 		return nil, err
 	}
-	err = docs.SaveDocsDictToDisk(common.DocDictPath)
 	if err != nil {
 		return nil, err
 	}
