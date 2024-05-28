@@ -1,10 +1,12 @@
 package common
 
 import (
+	"bufio"
 	"encoding/xml"
 	"fmt"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -108,7 +110,7 @@ type Records map[string]*Set // word:ID of Document
 type Index map[string][]int
 
 func (idx *Index) FindIndexes(text string) []int {
-	log.Printf("Querying %q\n....", text)
+	log.Printf("Querying %q....", text)
 	var res [][]int
 	for _, word := range TokenizeAndFilter(text) {
 		log.Printf("Word %q...", word)
@@ -122,4 +124,65 @@ func (idx *Index) FindIndexes(text string) []int {
 	}
 
 	return Intersect(res)
+}
+
+func (idx *Index) WriteToFile(path string) error {
+	var sb strings.Builder
+	for key, values := range *idx {
+		sb.WriteString(key)
+		sb.WriteString(":")
+		for _, v := range values {
+			sb.WriteString(fmt.Sprintf("%d,", v))
+		}
+		sb.WriteString("\n")
+	}
+
+	file, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	_, err = file.WriteString(sb.String())
+	return err
+}
+
+func ReadIndexFromFile(path string) (*Index, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	index := make(Index)
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		parts := strings.SplitN(line, ": ", 2)
+		// if len(parts) != 2 {
+		// 	return nil, fmt.Errorf("invalid line format: %s", line)
+		// }
+
+		key := parts[0]
+		valueStr := parts[1]
+		valueStrs := strings.Split(valueStr, ", ")
+		values := make([]int, len(valueStrs))
+
+		for i, s := range valueStrs {
+			value, err := strconv.Atoi(s)
+			if err != nil {
+				return nil, err
+			}
+			values[i] = value
+		}
+
+		index[key] = values
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	return &index, nil
+
 }

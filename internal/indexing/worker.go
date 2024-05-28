@@ -1,9 +1,7 @@
 package indexing
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/charmbracelet/log"
@@ -119,19 +117,6 @@ func (w *Worker) index(docs common.Documents) {
 	}
 
 	w.records = records
-	invertedIndex := make(common.Index)
-	for token, set := range w.records {
-		invertedIndex[token] = set.Items()
-	}
-	b, err := json.Marshal(invertedIndex)
-	if err != nil {
-		log.Fatalf("Cannot marshal records %v", err)
-	}
-
-	err = os.WriteFile(fmt.Sprintf("worker_%d", w.id), b, 0644)
-	if err != nil {
-		log.Fatalf("Cannot write records to disk %v", err)
-	}
 
 	log.Infof("worker %d finished indexing...", w.id)
 
@@ -150,19 +135,6 @@ func (w *Worker) combine(records []common.Records) {
 		}
 	}
 	w.records = combinedRecords
-	invertedIndex := make(common.Index)
-	for token, set := range w.records {
-		invertedIndex[token] = set.Items()
-	}
-	b, err := json.Marshal(invertedIndex)
-	if err != nil {
-		log.Fatalf("Cannot marshal records %v", err)
-	}
-
-	err = os.WriteFile(fmt.Sprintf("combine%d", w.id), b, 0644)
-	if err != nil {
-		log.Fatalf("Cannot write records to disk %v", err)
-	}
 
 	log.Infof("worker %d finished combining..., len %d", w.id, len(combinedRecords))
 }
@@ -173,14 +145,11 @@ func (w *Worker) saveRecordsToDisk() {
 	for token, set := range w.records {
 		invertedIndex[token] = set.Items()
 	}
-	b, err := json.Marshal(invertedIndex)
+	log.Infof("worker %d saving records to disk...", w.id)
+	err := invertedIndex.WriteToFile(common.OutputPath)
 	if err != nil {
-		log.Fatalf("Cannot marshal records %v", err)
-	}
-
-	err = os.WriteFile(common.OutputPath, b, 0644)
-	if err != nil {
-		log.Fatalf("Cannot write records to disk %v", err)
+		log.Errorf("worker %d cannot save records to disk, err: %v", w.id, err)
+		return
 	}
 	log.Infof("worker %d saved records to disk", w.id)
 }
